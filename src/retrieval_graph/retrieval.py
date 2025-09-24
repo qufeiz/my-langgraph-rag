@@ -78,8 +78,8 @@ def make_pinecone_retriever(
 
     search_kwargs = configuration.search_kwargs
 
-    search_filter = search_kwargs.setdefault("filter", {})
-    search_filter.update({"user_id": configuration.user_id})
+    #search_filter = search_kwargs.setdefault("filter", {})
+    #search_filter.update({"user_id": configuration.user_id})
     vstore = PineconeVectorStore.from_existing_index(
         os.environ["PINECONE_INDEX_NAME"], embedding=embedding_model
     )
