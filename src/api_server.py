@@ -1,16 +1,28 @@
 import logging
-from typing import List, Dict
-from fastapi import FastAPI
+import os
+from typing import List, Dict, Optional
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage, AIMessage
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from supabase import create_client, Client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 from retrieval_graph.graph import graph
+
+# Initialize Supabase client
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+if not supabase_url or not supabase_key:
+    logger.warning("Supabase credentials not found. Running without auth verification.")
+    supabase: Optional[Client] = None
+else:
+    supabase = create_client(supabase_url, supabase_key)
 
 app = FastAPI()
 
@@ -26,7 +38,29 @@ app.add_middleware(
 class Query(BaseModel):
     text: str
     conversation: List[Dict[str, str]] = []
-    user_id: str = "default_user"
+
+
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    """Extract and verify user from JWT token."""
+    if not authorization or not supabase:
+        # For development without auth
+        return {"id": "anonymous", "email": "anonymous@example.com"}
+
+    try:
+        # Extract token from "Bearer <token>"
+        token = authorization.replace("Bearer ", "")
+
+        # Verify token with Supabase
+        user_response = supabase.auth.get_user(token)
+
+        if user_response.user:
+            return {"id": user_response.user.id, "email": user_response.user.email}
+        else:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
 
 
 @app.get("/")
@@ -35,8 +69,9 @@ async def root():
 
 
 @app.post("/ask")
-async def ask(query: Query):
-    logger.info(f"Query from user {query.user_id}: {query.text[:100]}...")
+async def ask(query: Query, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["id"]
+    logger.info(f"Query from user {user_id} ({current_user['email']}): {query.text[:100]}...")
 
     try:
         # Build conversation history
@@ -54,19 +89,19 @@ async def ask(query: Query):
 
         result = await graph.ainvoke(
             {"messages": messages},
-            {"configurable": {"user_id": query.user_id}}
+            {"configurable": {"user_id": user_id}}
         )
 
         for message in reversed(result["messages"]):
             if hasattr(message, 'content') and message.content:
-                logger.info(f"Response sent to user {query.user_id}")
+                logger.info(f"Response sent to user {user_id}")
                 return {"response": message.content}
 
-        logger.warning(f"No response generated for user {query.user_id}")
+        logger.warning(f"No response generated for user {user_id}")
         return {"response": "No response"}
 
     except Exception as e:
-        logger.error(f"Error processing query for user {query.user_id}: {e}")
+        logger.error(f"Error processing query for user {user_id}: {e}")
         return {"response": f"Error: {str(e)}"}
 
 
