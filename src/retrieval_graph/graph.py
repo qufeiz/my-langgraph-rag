@@ -21,6 +21,21 @@ from retrieval_graph.configuration import Configuration
 from retrieval_graph.state import InputState, State
 from retrieval_graph.utils import format_docs, get_message_text, load_chat_model
 
+# import sys
+# print(">>> sys.path at startup:", sys.path)
+
+from retrieval_graph.fred_tool import enrich_with_fred_data
+
+import os
+from langsmith import Client
+
+print("API key:", os.getenv("LANGSMITH_API_KEY"))
+print("Project:", os.getenv("LANGSMITH_PROJECT"))
+
+client = Client()
+print("Projects:", [p.name for p in client.list_projects()])
+
+
 # Define the function that calls the model
 
 
@@ -105,6 +120,14 @@ async def retrieve(
         return {"retrieved_docs": response}
 
 
+async def tool_call(
+    state: State, *, config: RunnableConfig
+) -> dict[str, list[Document]]:
+    """Enrich retrieved docs with FRED data if series IDs are found."""
+    enriched_docs = enrich_with_fred_data(state.retrieved_docs)
+    return {"retrieved_docs": enriched_docs}
+
+
 async def respond(
     state: State, *, config: RunnableConfig
 ) -> dict[str, list[BaseMessage]]:
@@ -140,10 +163,12 @@ builder = StateGraph(State, input=InputState, config_schema=Configuration)
 
 builder.add_node(generate_query)
 builder.add_node(retrieve)
+builder.add_node(tool_call)
 builder.add_node(respond)
 builder.add_edge("__start__", "generate_query")
 builder.add_edge("generate_query", "retrieve")
-builder.add_edge("retrieve", "respond")
+builder.add_edge("retrieve", "tool_call")
+builder.add_edge("tool_call", "respond")
 
 # Finally, we compile it!
 # This compiles it into a graph you can invoke and deploy.
