@@ -92,10 +92,27 @@ async def ask(query: Query, current_user: dict = Depends(get_current_user)):
             {"configurable": {"user_id": user_id}}
         )
 
+        attachments: List[Dict[str, str]] = []
+        for doc in result.get("retrieved_docs", []) or []:
+            chart_image = doc.metadata.get("fred_chart_image")
+            if chart_image:
+                attachments.append(
+                    {
+                        "type": "image",
+                        "source": chart_image,
+                        "title": doc.metadata.get("title", "FRED Series"),
+                        "series_id": doc.metadata.get("series_id", ""),
+                    }
+                )
+                break
+
         for message in reversed(result["messages"]):
             if hasattr(message, 'content') and message.content:
                 logger.info(f"Response sent to user {user_id}")
-                return {"response": message.content}
+                payload: Dict[str, object] = {"response": message.content}
+                if attachments:
+                    payload["attachments"] = attachments
+                return payload
 
         logger.warning(f"No response generated for user {user_id}")
         return {"response": "No response"}

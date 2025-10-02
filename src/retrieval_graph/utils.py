@@ -56,6 +56,12 @@ def _format_doc(doc: Document) -> str:
         str: The formatted document as an XML string.
     """
     metadata = doc.metadata or {}
+    if metadata:
+        metadata = {
+            key: value
+            for key, value in metadata.items()
+            if key != "fred_chart_image"
+        }
     meta = "".join(f" {k}={v!r}" for k, v in metadata.items())
     if meta:
         meta = f" {meta}"
