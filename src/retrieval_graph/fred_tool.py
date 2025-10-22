@@ -21,6 +21,7 @@ class SeriesSnapshot:
     units: str
     frequency: str
     observations: list[dict[str, Any]]
+    notes: str | None = None
 
     def latest(self, count: int = 5) -> list[dict[str, Any]]:
         """Return the most recent `count` datapoints (chronological order)."""
@@ -68,6 +69,7 @@ class FredClient:
             units=info.get("units", ""),
             frequency=info.get("frequency", ""),
             observations=observations,
+            notes=info.get("notes"),
         )
 
     def render_chart(
@@ -139,28 +141,43 @@ def build_series_datablock(
         "title": snapshot.title,
         "units": snapshot.units,
         "frequency": snapshot.frequency,
+        "notes": snapshot.notes,
         "points": observations,
     }
 
 
 def fetch_chart(series_id: str) -> dict[str, Any]:
     """Fetch a series and prepare an attachment-only response."""
-    snapshot = get_fred_client().get_series_snapshot(series_id)
-    attachment = build_chart_attachment(snapshot)
-    return {
-        "message": f"Generated chart for {snapshot.title} ({series_id}).",
-        "attachments": [attachment],
-    }
+    try:
+        snapshot = get_fred_client().get_series_snapshot(series_id)
+        attachment = build_chart_attachment(snapshot)
+        return {
+            "message": f"Generated chart for {snapshot.title} ({series_id}).",
+            "attachments": [attachment],
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "message": f"Failed to generate chart for '{series_id}': {exc}",
+            "attachments": [],
+            "error": str(exc),
+        }
 
 
 def fetch_recent_data(series_id: str, *, latest_points: int = 12) -> dict[str, Any]:
     """Fetch structured datapoints for a series."""
-    snapshot = get_fred_client().get_series_snapshot(series_id)
-    datablock = build_series_datablock(snapshot, latest_points=latest_points)
-    return {
-        "message": (
-            f"Retrieved {len(datablock['points'])} recent data points for "
-            f"{snapshot.title} ({series_id})."
-        ),
-        "series_data": [datablock],
-    }
+    try:
+        snapshot = get_fred_client().get_series_snapshot(series_id)
+        datablock = build_series_datablock(snapshot, latest_points=latest_points)
+        return {
+            "message": (
+                f"Retrieved {len(datablock['points'])} recent data points for "
+                f"{snapshot.title} ({series_id})."
+            ),
+            "series_data": [datablock],
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "message": f"Failed to fetch recent data for '{series_id}': {exc}",
+            "series_data": [],
+            "error": str(exc),
+        }

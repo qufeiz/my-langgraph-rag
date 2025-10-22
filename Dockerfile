@@ -6,15 +6,22 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
+    git \
+    libfreetype6 \
+    libfreetype6-dev \
+    libpng-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application code first
+ENV PYTHONUNBUFFERED=1
+
+# Copy application code
 COPY . .
 
-# Install Python dependencies with compatible versions
-RUN pip install -e . && \
-    pip install -U "langgraph-cli[inmem]" && \
-    pip install "pydantic>=2.0.0,<3.0.0"
+RUN pip install --no-cache-dir -U pip && \
+    pip install --no-cache-dir -e . && \
+    pip install --no-cache-dir -U "langgraph-cli[inmem]" && \
+    pip install --no-cache-dir "pydantic>=2.0.0,<3.0.0"
 
 # Expose the port that LangGraph dev server runs on
 EXPOSE 8123
