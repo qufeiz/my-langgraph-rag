@@ -14,7 +14,7 @@ It contains example graphs exported from `src/retrieval_agent/graph.py` that imp
 
 - **ReAct-style agent**: the conversational graph now orchestrates `retrieve_documents`, `fred_chart`, and `fred_recent_data` tools, storing chart images in state attachments and latest datapoints (with notes) in `series_data`.
 - **OpenSearch ingestion**: use `scripts/index_opensearch.py` to load series metadata into an OpenSearch index (`--recreate` drops and rebuilds the index, and a progress bar shows chunk preparation). Notes are excluded from the index to keep keyword search lean.
-- **FRED helpers**: `fetch_chart`/`fetch_recent_data` include series notes, and return friendly error messages when a series ID is missing to keep conversations from crashing.
+- **FRED helpers**: `fetch_chart` now pulls the official `fredgraph.png` image (no matplotlib) while `fetch_recent_data` includes series notes; both return friendly error messages when a series ID is missing to keep conversations from crashing.
 - **Smoke testing**: `scripts/smoke_fred.py <series_id>` quickly verifies live FRED access and emits chart/data payloads without touching the agent.
 
 ## What it does

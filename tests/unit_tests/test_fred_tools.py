@@ -11,13 +11,16 @@ from retrieval_graph import fred_tool
 @dataclass
 class _StubClient:
     snapshot: fred_tool.SeriesSnapshot
-    chart_payload: str | None = "data:image/png;base64,FAKE_IMAGE"
+    chart_payload: bytes | None = b"FAKE_IMAGE_BYTES"
 
-    def get_series_snapshot(self, series_id: str, *, limit: int = 180) -> fred_tool.SeriesSnapshot:  # noqa: D401
+    def get_series_snapshot(  # noqa: D401
+        self,
+        series_id: str,
+        *,
+        limit: int = 180,
+        include_observations: bool = True,
+    ) -> fred_tool.SeriesSnapshot:
         return self.snapshot
-
-    def render_chart(self, observations: list[dict[str, Any]], title: str | None, *, width: int = 6, height: int = 3) -> str | None:  # noqa: D401
-        return self.chart_payload
 
 
 @pytest.fixture(autouse=True)
@@ -44,6 +47,11 @@ def test_fetch_chart_returns_attachment(monkeypatch: pytest.MonkeyPatch) -> None
     snapshot = _make_snapshot()
     stub = _StubClient(snapshot=snapshot)
     monkeypatch.setattr(fred_tool, "get_fred_client", lambda: stub)
+    monkeypatch.setattr(
+        fred_tool,
+        "_download_chart_image",
+        lambda series_id: ("https://example/chart.png", stub.chart_payload),
+    )
 
     payload = fred_tool.fetch_chart("TEST_SERIES")
 
@@ -53,6 +61,7 @@ def test_fetch_chart_returns_attachment(monkeypatch: pytest.MonkeyPatch) -> None
     assert attachments and attachments[0]["source"].startswith("data:image/png;base64")
     assert attachments[0]["series_id"] == "TEST_SERIES"
     assert attachments[0]["title"] == "Test Series"
+    assert attachments[0]["chart_url"] == "https://example/chart.png"
 
 
 def test_fetch_recent_data_respects_latest_points(monkeypatch: pytest.MonkeyPatch) -> None:

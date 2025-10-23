@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -81,12 +83,41 @@ async def main() -> None:
         default="smoke-user",
         help="User id to pass through the graph (default: smoke-user).",
     )
+    parser.add_argument(
+        "--out-dir",
+        type=str,
+        default="smoke_outputs",
+        help="Directory to write chart images (default: smoke_outputs).",
+    )
     args = parser.parse_args()
 
     require_env("FRED_API_KEY")
 
     chart_payload = fetch_chart(args.series_id)
     dump_section("Chart Payload", chart_payload)
+
+    attachments = chart_payload.get("attachments") or []
+    if attachments:
+        output_dir = Path(args.out_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for idx, attachment in enumerate(attachments, start=1):
+            if attachment.get("type") != "image":
+                continue
+            source = attachment.get("source", "")
+            prefix = "data:image/png;base64,"
+            if not source.startswith(prefix):
+                print(f"Skipping attachment {idx}: Unexpected format.")
+                continue
+            encoded = source[len(prefix) :]
+            try:
+                data = base64.b64decode(encoded)
+            except Exception as exc:  # pragma: no cover - defensive
+                print(f"Failed to decode attachment {idx}: {exc}")
+                continue
+
+            filename = output_dir / f"{args.series_id}_chart_{idx}.png"
+            filename.write_bytes(data)
+            print(f"Saved chart to {filename}")
 
     data_payload = fetch_recent_data(args.series_id, latest_points=args.latest_points)
     dump_section("Data Payload", data_payload)
