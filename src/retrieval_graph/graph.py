@@ -19,6 +19,7 @@ from retrieval_graph.fred_tool import (
     fetch_chart,
     fetch_recent_data,
     fetch_series_release_schedule,
+    fetch_release_structure_by_name,
 )
 from retrieval_graph.state import InputState, State
 from retrieval_graph.utils import format_docs, load_chat_model
@@ -72,26 +73,26 @@ TOOL_DEFINITIONS = [
             },
         },
     },
-    # {
-    #     "type": "function",
-    #     "function": {
-    #         "name": "fred_recent_data",
-    #         "description": (
-    #             "Fetch recent numeric datapoints for a FRED series and use them in analysis. "
-    #             "Call this when the user needs the latest figures or trends."
-    #         ),
-    #         "parameters": {
-    #             "type": "object",
-    #             "properties": {
-    #                 "series_id": {
-    #                     "type": "string",
-    #                     "description": "Exact FRED series identifier (e.g. UNRATE).",
-    #                 }
-    #             },
-    #             "required": ["series_id"],
-    #         },
-    #     },
-    # },
+    {
+        "type": "function",
+        "function": {
+            "name": "fred_recent_data",
+            "description": (
+                "Fetch recent numeric datapoints for a FRED series and use them in analysis. "
+                "Call this when the user needs the latest figures or trends."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "series_id": {
+                        "type": "string",
+                        "description": "Exact FRED series identifier (e.g. UNRATE).",
+                    }
+                },
+                "required": ["series_id"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -108,6 +109,25 @@ TOOL_DEFINITIONS = [
                     }
                 },
                 "required": ["series_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fred_release_structure",
+            "description": (
+                "Fetch release metadata and table structure by release name (e.g. H.4.1)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "release_name": {
+                        "type": "string",
+                        "description": "FRED release name to inspect (e.g. H.4.1).",
+                    }
+                },
+                "required": ["release_name"],
             },
         },
     },
@@ -238,6 +258,19 @@ async def call_tool(
                 else:
                     lines.append("No release dates returned.")
                 content = "\n".join(lines)
+        elif name == "fred_release_structure":
+            release_name = args.get("release_name")
+            if not release_name:
+                content = (
+                    "A release_name is required to fetch release structure metadata."
+                )
+            else:
+                payload = fetch_release_structure_by_name(release_name)
+                message = payload.get(
+                    "message",
+                    f"Retrieved release structure for {release_name}.",
+                )
+                content = f"{message}\n{json.dumps(payload, indent=2)}"
         else:
             content = f"Tool '{name}' is not implemented."
 

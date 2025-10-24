@@ -30,7 +30,13 @@ SRC_PATH = os.path.join(ROOT, "src")
 if SRC_PATH not in sys.path:
     sys.path.insert(0, SRC_PATH)
 
-from retrieval_graph.fred_tool import fetch_chart, fetch_recent_data, fetch_release_schedule, fetch_series_release_schedule  # noqa: E402
+from retrieval_graph.fred_tool import (
+    fetch_chart,
+    fetch_recent_data,
+    #fetch_release_schedule,
+    fetch_series_release_schedule,
+    fetch_release_structure_by_name,
+)  # noqa: E402
 from retrieval_graph.graph import graph  # noqa: E402
 
 
@@ -67,7 +73,7 @@ async def main() -> None:
     parser.add_argument(
         "series_id",
         nargs="?",
-        default="CPIACSL",
+        default="GDP",
         help="FRED series identifier (default: CPIAUCSL).",
     )
     parser.add_argument(
@@ -97,51 +103,61 @@ async def main() -> None:
     parser.add_argument(
         "--release-id",
         type=int,
-        default=50,
+        default=0,
         help=(
             "Optional FRED release ID to test schedule fetch (default: 50 for GDP). "
             "Value <= 0 skips the schedule request."
         ),
     )
+    parser.add_argument(
+        "--release-name",
+        type=str,
+        default="H.4.1",
+        help="Optional FRED release name (e.g. 'H.4.1') to fetch structure metadata.",
+    )
     args = parser.parse_args()
 
     require_env("FRED_API_KEY")
 
-    chart_payload = fetch_chart(args.series_id)
-    dump_section("Chart Payload", chart_payload)
+    #chart_payload = fetch_chart(args.series_id)
+    #dump_section("Chart Payload", chart_payload)
 
-    attachments = chart_payload.get("attachments") or []
-    if attachments:
-        output_dir = Path(args.out_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        for idx, attachment in enumerate(attachments, start=1):
-            if attachment.get("type") != "image":
-                continue
-            source = attachment.get("source", "")
-            prefix = "data:image/png;base64,"
-            if not source.startswith(prefix):
-                print(f"Skipping attachment {idx}: Unexpected format.")
-                continue
-            encoded = source[len(prefix) :]
-            try:
-                data = base64.b64decode(encoded)
-            except Exception as exc:  # pragma: no cover - defensive
-                print(f"Failed to decode attachment {idx}: {exc}")
-                continue
+    #attachments = chart_payload.get("attachments") or []
+    # if attachments:
+    #     output_dir = Path(args.out_dir)
+    #     output_dir.mkdir(parents=True, exist_ok=True)
+    #     for idx, attachment in enumerate(attachments, start=1):
+    #         if attachment.get("type") != "image":
+    #             continue
+    #         source = attachment.get("source", "")
+    #         prefix = "data:image/png;base64,"
+    #         if not source.startswith(prefix):
+    #             print(f"Skipping attachment {idx}: Unexpected format.")
+    #             continue
+    #         encoded = source[len(prefix) :]
+    #         try:
+    #             data = base64.b64decode(encoded)
+    #         except Exception as exc:  # pragma: no cover - defensive
+    #             print(f"Failed to decode attachment {idx}: {exc}")
+    #             continue
 
-            filename = output_dir / f"{args.series_id}_chart_{idx}.png"
-            filename.write_bytes(data)
-            print(f"Saved chart to {filename}")
+    #         filename = output_dir / f"{args.series_id}_chart_{idx}.png"
+    #         filename.write_bytes(data)
+    #         print(f"Saved chart to {filename}")
 
-    data_payload = fetch_recent_data(args.series_id, latest_points=args.latest_points)
-    dump_section("Data Payload", data_payload)
+    # data_payload = fetch_recent_data(args.series_id, latest_points=args.latest_points)
+    # dump_section("Data Payload", data_payload)
 
-    if args.release_id > 0:
-        schedule_payload = fetch_release_schedule(args.release_id)
-        dump_section("Release Schedule", schedule_payload)
+    # if args.release_id > 0:
+    #     schedule_payload = fetch_release_schedule(args.release_id)
+    #     dump_section("Release Schedule", schedule_payload)
 
     series_release_payload = fetch_series_release_schedule(args.series_id)
     dump_section("Series Release Schedule", series_release_payload)
+
+    if args.release_name:
+        structure_payload = fetch_release_structure_by_name(args.release_name)
+        dump_section("Release Structure", structure_payload)
 
     if args.prompt:
         await run_agent(args.series_id, args.prompt, args.user_id)
