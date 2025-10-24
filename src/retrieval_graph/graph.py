@@ -15,7 +15,11 @@ from langgraph.graph import StateGraph
 
 from retrieval_graph import retrieval
 from retrieval_graph.configuration import Configuration
-from retrieval_graph.fred_tool import fetch_chart, fetch_recent_data
+from retrieval_graph.fred_tool import (
+    fetch_chart,
+    fetch_recent_data,
+    fetch_series_release_schedule,
+)
 from retrieval_graph.state import InputState, State
 from retrieval_graph.utils import format_docs, load_chat_model
 
@@ -68,20 +72,39 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "fred_recent_data",
+    #         "description": (
+    #             "Fetch recent numeric datapoints for a FRED series and use them in analysis. "
+    #             "Call this when the user needs the latest figures or trends."
+    #         ),
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "series_id": {
+    #                     "type": "string",
+    #                     "description": "Exact FRED series identifier (e.g. UNRATE).",
+    #                 }
+    #             },
+    #             "required": ["series_id"],
+    #         },
+    #     },
+    # },
     {
         "type": "function",
         "function": {
-            "name": "fred_recent_data",
+            "name": "fred_series_release_schedule",
             "description": (
-                "Fetch recent numeric datapoints for a FRED series and use them in analysis. "
-                "Call this when the user needs the latest figures or trends."
+                "Resolve a FRED series to its release and return upcoming release dates."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "series_id": {
                         "type": "string",
-                        "description": "Exact FRED series identifier (e.g. UNRATE).",
+                        "description": "FRED series identifier (e.g. UNRATE, CPIAUCSL).",
                     }
                 },
                 "required": ["series_id"],
@@ -174,6 +197,47 @@ async def call_tool(
                 series_data.extend(series_blocks)
                 block_json = json.dumps(series_blocks, indent=2)
                 content = f"{payload.get('message', 'Retrieved series data.')}\n{block_json}"
+        # elif name == "fred_release_schedule":
+        #     release_id = args.get("release_id")
+        #     if release_id in (None, ""):
+        #         content = "A FRED release_id is required to fetch the release schedule."
+        #     else:
+        #         release_id_int = int(release_id)
+        #         payload = fetch_release_schedule(release_id_int)
+        #         schedule = payload.get("release_schedule", [])
+        #         message = payload.get(
+        #             "message",
+        #             f"Retrieved release schedule for {release_id_int}.",
+        #         )
+        #         content_lines = [message]
+        #         if schedule:
+        #             content_lines.append(json.dumps(schedule, indent=2))
+        #         elif payload.get("error"):
+        #             content_lines.append(f"Error: {payload['error']}")
+        #         else:
+        #             content_lines.append("No release dates returned.")
+        #         content = "\n".join(content_lines)
+        elif name == "fred_series_release_schedule":
+            series_id = args.get("series_id")
+            if not series_id:
+                content = (
+                    "A FRED series_id is required to fetch the series release schedule."
+                )
+            else:
+                payload = fetch_series_release_schedule(series_id)
+                schedule = payload.get("release_schedule", [])
+                message = payload.get(
+                    "message",
+                    f"Retrieved release schedule for {series_id}.",
+                )
+                lines = [message]
+                if schedule:
+                    lines.append(json.dumps(schedule, indent=2))
+                elif payload.get("error"):
+                    lines.append(f"Error: {payload['error']}")
+                else:
+                    lines.append("No release dates returned.")
+                content = "\n".join(lines)
         else:
             content = f"Tool '{name}' is not implemented."
 

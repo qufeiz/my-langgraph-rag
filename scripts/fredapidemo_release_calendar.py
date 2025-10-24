@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RELEASE_ID = 50  # Gross Domestic Product
-YEAR = 2025
 
 
 def main() -> None:
@@ -24,16 +23,39 @@ def main() -> None:
         "api_key": api_key,
         "file_type": "json",
         "release_id": RELEASE_ID,
-        "year": YEAR,
         "include_release_dates_with_no_data": "true",
     }
+
     response = requests.get(
         "https://api.stlouisfed.org/fred/release/dates", params=params, timeout=10
     )
     response.raise_for_status()
     data = response.json()
-    print(f"Release dates for release_id={RELEASE_ID} in {YEAR}:")
-    pprint(data)
+    dates = data.get("release_dates", [])
+    if not dates:
+        print("No release dates returned.")
+        return
+
+    year_candidates = [
+        int(item["date"][:4])
+        for item in dates
+        if isinstance(item.get("date"), str) and item["date"][:4].isdigit()
+    ]
+    if not year_candidates:
+        print("No valid release dates returned.")
+        pprint(data)
+        return
+
+    latest_year = max(year_candidates)
+
+    filtered_dates = [
+        item
+        for item in dates
+        if isinstance(item.get("date"), str) and item["date"].startswith(str(latest_year))
+    ]
+
+    print(f"Release dates for release_id={RELEASE_ID} in {latest_year}:")
+    pprint(filtered_dates)
 
 
 if __name__ == "__main__":

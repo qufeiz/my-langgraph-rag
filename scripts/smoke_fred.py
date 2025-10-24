@@ -30,7 +30,7 @@ SRC_PATH = os.path.join(ROOT, "src")
 if SRC_PATH not in sys.path:
     sys.path.insert(0, SRC_PATH)
 
-from retrieval_graph.fred_tool import fetch_chart, fetch_recent_data  # noqa: E402
+from retrieval_graph.fred_tool import fetch_chart, fetch_recent_data, fetch_release_schedule, fetch_series_release_schedule  # noqa: E402
 from retrieval_graph.graph import graph  # noqa: E402
 
 
@@ -64,7 +64,12 @@ async def run_agent(series_id: str, prompt: str, user_id: str) -> None:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("series_id", help="FRED series identifier (e.g. CPIAUCSL)")
+    parser.add_argument(
+        "series_id",
+        nargs="?",
+        default="CPIACSL",
+        help="FRED series identifier (default: CPIAUCSL).",
+    )
     parser.add_argument(
         "--latest-points",
         type=int,
@@ -88,6 +93,15 @@ async def main() -> None:
         type=str,
         default="smoke_outputs",
         help="Directory to write chart images (default: smoke_outputs).",
+    )
+    parser.add_argument(
+        "--release-id",
+        type=int,
+        default=50,
+        help=(
+            "Optional FRED release ID to test schedule fetch (default: 50 for GDP). "
+            "Value <= 0 skips the schedule request."
+        ),
     )
     args = parser.parse_args()
 
@@ -121,6 +135,13 @@ async def main() -> None:
 
     data_payload = fetch_recent_data(args.series_id, latest_points=args.latest_points)
     dump_section("Data Payload", data_payload)
+
+    if args.release_id > 0:
+        schedule_payload = fetch_release_schedule(args.release_id)
+        dump_section("Release Schedule", schedule_payload)
+
+    series_release_payload = fetch_series_release_schedule(args.series_id)
+    dump_section("Series Release Schedule", series_release_payload)
 
     if args.prompt:
         await run_agent(args.series_id, args.prompt, args.user_id)

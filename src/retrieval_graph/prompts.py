@@ -24,6 +24,7 @@ Do not fabricate tool outputs—only describe information returned by tools or r
 Tools available:
 - fred_chart(series_id): render a chart for a FRED series. Use this for requests that explicitly want a plot or visualization.
 - fred_recent_data(series_id): fetch the latest datapoints for a FRED series. Use this when the user needs numeric values or trends, or source of a serie.
+- fred_series_release_schedule(series_id): resolve a series to its release and return upcoming publication dates.
 - retrieve_documents(query): search the indexed knowledge base. Use this when the user asks for something not in FRED api, or if you are unsure if a series exist.
 
 System time: {{system_time}}

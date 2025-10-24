@@ -1,11 +1,13 @@
 import base64
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 from typing import Any
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+import requests
 from dotenv import load_dotenv
 from fredapi import Fred
 
@@ -164,5 +166,143 @@ def fetch_recent_data(series_id: str, *, latest_points: int = 12) -> dict[str, A
         return {
             "message": f"Failed to fetch recent data for '{series_id}': {exc}",
             "series_data": [],
+            "error": str(exc),
+        }
+
+
+def fetch_release_schedule(release_id: int) -> dict[str, Any]:
+    """Fetch scheduled release dates for a FRED release."""
+    api_key = os.getenv("FRED_API_KEY")
+    if not api_key:
+        raise RuntimeError("FRED_API_KEY is required to call release schedule tool.")
+
+    params: dict[str, Any] = {
+        "api_key": api_key,
+        "file_type": "json",
+        "release_id": release_id,
+        "include_release_dates_with_no_data": "true",
+    }
+
+    try:
+        response = requests.get(
+            "https://api.stlouisfed.org/fred/release/dates",
+            params=params,
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        dates = payload.get("release_dates", [])
+
+        year_candidates = [
+            int(item["date"][:4])
+            for item in dates
+            if isinstance(item.get("date"), str) and item["date"][:4].isdigit()
+        ]
+        latest_year = max(year_candidates) if year_candidates else None
+        filtered_dates = [
+            item
+            for item in dates
+            if latest_year is None
+            or (
+                isinstance(item.get("date"), str)
+                and item["date"].startswith(str(latest_year))
+            )
+        ]
+
+        year_text = f" {latest_year}" if latest_year is not None else ""
+        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        return {
+            "message": (
+                f"Retrieved {len(filtered_dates)} release dates for release {release_id}{year_text}. "
+                f"Today: {today_str}."
+            ),
+            "release_schedule": filtered_dates,
+            "release_year": latest_year,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "message": f"Failed to fetch release schedule for '{release_id}': {exc}",
+            "release_schedule": [],
+            "error": str(exc),
+        }
+
+
+def fetch_series_release_schedule(series_id: str) -> dict[str, Any]:
+    """Resolve a series to its release and fetch the corresponding schedule."""
+    api_key = os.getenv("FRED_API_KEY")
+    if not api_key:
+        raise RuntimeError("FRED_API_KEY is required to call series release tool.")
+
+    try:
+        response = requests.get(
+            "https://api.stlouisfed.org/fred/series/release",
+            params={
+                "series_id": series_id,
+                "api_key": api_key,
+                "file_type": "json",
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        releases = data.get("releases", [])
+        if not releases:
+            return {
+                "message": f"No release found for series '{series_id}'.",
+                "release_schedule": [],
+                "error": f"No release metadata for {series_id}",
+            }
+        release_meta = releases[0]
+        release_id = int(release_meta.get("id", 0))
+        release_name = release_meta.get("name", "Unknown release")
+
+        schedule_resp = requests.get(
+            "https://api.stlouisfed.org/fred/release/dates",
+            params={
+                "api_key": api_key,
+                "file_type": "json",
+                "release_id": release_id,
+                "include_release_dates_with_no_data": "true",
+            },
+            timeout=10,
+        )
+        schedule_resp.raise_for_status()
+        schedule_data = schedule_resp.json()
+        dates = schedule_data.get("release_dates", [])
+
+        year_candidates = [
+            int(item["date"][:4])
+            for item in dates
+            if isinstance(item.get("date"), str) and item["date"][:4].isdigit()
+        ]
+        latest_year = max(year_candidates) if year_candidates else None
+        filtered_dates = [
+            item
+            for item in dates
+            if latest_year is None
+            or (
+                isinstance(item.get("date"), str)
+                and item["date"].startswith(str(latest_year))
+            )
+        ]
+
+        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        year_text = f" {latest_year}" if latest_year is not None else ""
+        message = (
+            f"Series {series_id} belongs to release {release_name} ({release_id}). "
+            f"Retrieved {len(filtered_dates)} release dates for release {release_id}{year_text}. "
+            f"Today: {today_str}."
+        )
+        return {
+            "message": message,
+            "release_schedule": filtered_dates,
+            "release_year": latest_year,
+            "release_info": {"id": release_id, "name": release_name},
+            "series_id": series_id,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "message": f"Failed to resolve release for '{series_id}': {exc}",
+            "release_schedule": [],
             "error": str(exc),
         }
