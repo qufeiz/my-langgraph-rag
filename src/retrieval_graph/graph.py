@@ -34,6 +34,8 @@ print("Project:", os.getenv("LANGSMITH_PROJECT"))
 client = Client()
 print("Projects:", [p.name for p in client.list_projects()])
 
+MAX_TOOL_CALLS = 4
+
 TOOL_DEFINITIONS = [
     {
         "type": "function",
@@ -218,6 +220,7 @@ async def call_tool(
     collected_docs: list[Document] = []
     collected_queries: list[str] = []
     tool_messages: list[ToolMessage] = []
+    tool_call_count = getattr(state, "tool_call_count", 0)
 
     last_message = state.messages[-1]
     tool_calls = getattr(last_message, "tool_calls", []) or []
@@ -226,6 +229,19 @@ async def call_tool(
         name = tool_call.get("name")
         args = tool_call.get("args") or {}
         call_id = tool_call.get("id")
+
+        if tool_call_count >= MAX_TOOL_CALLS:
+            content = (
+                "Tool-call limit reached. Provide the best answer you can with the "
+                "information already collected."
+            )
+            tool_messages.append(
+                ToolMessage(
+                    content=content,
+                    tool_call_id=call_id or "",
+                )
+            )
+            break
 
         if name == "retrieve_documents":
             query = args.get("query")
@@ -296,6 +312,7 @@ async def call_tool(
                 else:
                     lines.append("No release dates returned.")
                 content = "\n".join(lines)
+                tool_call_count += 1
         elif name == "fred_release_structure":
             release_name = args.get("release_name")
             if not release_name:
@@ -309,6 +326,7 @@ async def call_tool(
                     f"Retrieved release structure for {release_name}.",
                 )
                 content = f"{message}\n{json.dumps(payload, indent=2)}"
+                tool_call_count += 1
         elif name == "fraser_search_fomc_titles":
             query = args.get("query")
             if not query:
@@ -331,6 +349,19 @@ async def call_tool(
                     f"Retrieved search results for '{query}'.",
                 )
                 content = f"{message}\n{json.dumps(payload, indent=2)}"
+                tool_call_count += 1
+        elif name == "fraser_search_fomc_titles":
+            query = args.get("query")
+            if not query:
+                content = "A query is required to search FOMC titles."
+            else:
+                payload = search_fomc_titles(query)
+                message = payload.get(
+                    "message",
+                    f"Retrieved FOMC titles for '{query}'.",
+                )
+                content = f"{message}\n{json.dumps(payload, indent=2)}"
+                tool_call_count += 1
         else:
             content = f"Tool '{name}' is not implemented."
 
@@ -341,7 +372,10 @@ async def call_tool(
             )
         )
 
-    updates: dict[str, Any] = {"messages": tool_messages}
+    updates: dict[str, Any] = {
+        "messages": tool_messages,
+        "tool_call_count": tool_call_count,
+    }
     if attachments:
         updates["attachments"] = attachments
     if series_data:

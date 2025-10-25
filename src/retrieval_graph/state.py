@@ -196,5 +196,7 @@ class State(InputState):
     )
     """Structured datapoints from FRED data tool, available for downstream reasoning."""
 
+    tool_call_count: int = 0
+    """Number of tool invocations so far in this run (prevents infinite loops)."""
     # Feel free to add additional attributes to your state as needed.
     # Common examples include retrieved documents, extracted entities, API connections, etc.
