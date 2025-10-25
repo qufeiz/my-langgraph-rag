@@ -27,6 +27,7 @@ Tools available:
 - fred_series_release_schedule(series_id): resolve a series to its release and return upcoming publication dates.
 - fred_release_structure(release_name): fetch release metadata and table structure by release name (e.g. H.4.1).
 - fred_search_series(query): search FRED for series whose metadata matches the query text.
+- fraser_search_fomc_titles(query): fuzzy search FRASER/Postgres meeting titles (e.g. "Meeting, January 26-27, 2010") to retrieve PDF URLs.
 - retrieve_documents(query): search the indexed knowledge base. Use this when the user asks for something not in FRED api.
 
 System time: {{system_time}}

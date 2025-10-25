@@ -22,6 +22,7 @@ from retrieval_graph.fred_tool import (
     fetch_release_structure_by_name,
     search_series,
 )
+from retrieval_graph.fraser_tool import search_fomc_titles
 from retrieval_graph.state import InputState, State
 from retrieval_graph.utils import format_docs, load_chat_model
 
@@ -129,6 +130,25 @@ TOOL_DEFINITIONS = [
                     }
                 },
                 "required": ["release_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fraser_search_fomc_titles",
+            "description": (
+                "Search the FRASER/Postgres FOMC catalog for meeting titles (e.g. 'Meeting, January 2010')."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Fuzzy title query, e.g. 'Meeting, January 26-27, 2010'.",
+                    }
+                },
+                "required": ["query"],
             },
         },
     },
@@ -287,6 +307,17 @@ async def call_tool(
                 message = payload.get(
                     "message",
                     f"Retrieved release structure for {release_name}.",
+                )
+                content = f"{message}\n{json.dumps(payload, indent=2)}"
+        elif name == "fraser_search_fomc_titles":
+            query = args.get("query")
+            if not query:
+                content = "A query is required to search FOMC titles."
+            else:
+                payload = search_fomc_titles(query)
+                message = payload.get(
+                    "message",
+                    f"Retrieved FOMC titles for '{query}'.",
                 )
                 content = f"{message}\n{json.dumps(payload, indent=2)}"
         elif name == "fred_search_series":
